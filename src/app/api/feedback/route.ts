@@ -1,36 +1,79 @@
+import OpenAI from "openai";
 import { NextResponse } from "next/server";
 
+const client = new OpenAI({
+  apiKey: process.env.DEEPSEEK_API_KEY,
+  baseURL: "https://api.deepseek.com",
+});
+
 export async function POST(request: Request) {
-  const body = await request.json();
-  const { role, answer } = body;
+  try {
+    const body = await request.json();
+    const { role, answer } = body;
 
-  const answerLength = answer?.trim().length || 0;
+    if (!answer || answer.trim().length < 5) {
+      return NextResponse.json({
+        role,
+        score: 40,
+        feedback: "你的回答太短了，建议先补充完整回答内容。",
+        suggestions: ["补充背景", "说明行动", "加入结果"],
+      });
+    }
 
-  let score = 60;
-  let feedback = "";
+    const completion = await client.chat.completions.create({
+      model: "deepseek-chat",
+      messages: [
+        {
+          role: "system",
+          content:
+            "你是一名专业的 AI 面试教练。请根据用户的岗位和面试回答，给出评分、反馈和优化建议。必须只返回 JSON，不要返回 Markdown。",
+        },
+        {
+          role: "user",
+          content: `
+岗位：${role}
 
-  if (answerLength < 20) {
-    score = 45;
-    feedback = "你的回答偏短，建议补充背景、行动过程和最终结果。";
-  } else if (answerLength < 80) {
-    score = 70;
-    feedback =
-      "你的回答有基本方向，但结构还可以更清晰。建议使用 STAR 法则：背景、任务、行动、结果。";
-  } else {
-    score = 88;
-    feedback =
-      "你的回答比较完整，已经具备一定逻辑。下一步可以补充数据结果、个人贡献和岗位匹配点，让回答更有说服力。";
+用户回答：
+${answer}
+
+请严格返回 JSON：
+{
+  "score": 85,
+  "feedback": "一段中文反馈",
+  "suggestions": ["建议1", "建议2", "建议3"]
+}
+          `,
+        },
+      ],
+      response_format: { type: "json_object" },
+    });
+
+    const content = completion.choices[0].message.content;
+
+    if (!content) {
+      throw new Error("DeepSeek 没有返回内容");
+    }
+
+    const result = JSON.parse(content);
+
+    return NextResponse.json({
+      role,
+      score: result.score,
+      feedback: result.feedback,
+      suggestions: result.suggestions,
+    });
+  } catch (error) {
+    console.error(error);
+
+    return NextResponse.json(
+      {
+        role: "未知岗位",
+        score: 60,
+        feedback:
+          "AI 接口暂时不可用，当前返回备用反馈。你的回答有基本方向，但还可以补充更多具体案例和结果数据。",
+        suggestions: ["补充具体案例", "使用 STAR 法则", "强化岗位匹配度"],
+      },
+      { status: 200 }
+    );
   }
-
-  return NextResponse.json({
-    role,
-    score,
-    feedback,
-    suggestions: [
-      "补充具体案例",
-      "强化结果数据",
-      "突出个人贡献",
-      "提高和岗位要求的匹配度",
-    ],
-  });
 }
