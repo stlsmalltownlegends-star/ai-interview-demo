@@ -9,33 +9,37 @@ const interviewQuestions = {
   运营岗位: "请举例说明你会如何提升一个产品的新用户转化率。",
 };
 
+type FeedbackResult = {
+  role: string;
+  score: number;
+  feedback: string;
+  suggestions: string[];
+};
+
 export default function Home() {
   const [role, setRole] = useState("产品经理");
   const [answer, setAnswer] = useState("");
-  const [feedback, setFeedback] = useState("");
-  const [score, setScore] = useState<number | null>(null);
+  const [result, setResult] = useState<FeedbackResult | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  function generateFeedback() {
-    const length = answer.trim().length;
+  async function generateFeedback() {
+    setLoading(true);
+    setResult(null);
 
-    if (length < 10) {
-      setScore(45);
-      setFeedback("你的回答太短了。建议补充背景、行动过程和最终结果。");
-      return;
-    }
+    const response = await fetch("/api/feedback", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        role,
+        answer,
+      }),
+    });
 
-    if (length < 50) {
-      setScore(68);
-      setFeedback(
-        "你的回答有基本方向，但细节不足。建议用 STAR 法则表达：背景、任务、行动、结果。"
-      );
-      return;
-    }
-
-    setScore(86);
-    setFeedback(
-      "你的回答较完整，有一定逻辑。下一步可以加强数据结果、岗位匹配度和个人贡献，让答案更像真实面试中的高质量回答。"
-    );
+    const data = await response.json();
+    setResult(data);
+    setLoading(false);
   }
 
   return (
@@ -72,9 +76,9 @@ export default function Home() {
           </div>
 
           <div className="border border-gray-700 rounded-2xl p-6">
-            <h2 className="text-xl font-semibold mb-3">AI 反馈</h2>
+            <h2 className="text-xl font-semibold mb-3">接口反馈</h2>
             <p className="text-gray-400">
-              系统输出评分、问题和优化方向。
+              前端调用后端 API，返回评分和建议。
             </p>
           </div>
         </div>
@@ -89,8 +93,7 @@ export default function Home() {
               onChange={(e) => {
                 setRole(e.target.value);
                 setAnswer("");
-                setFeedback("");
-                setScore(null);
+                setResult(null);
               }}
             >
               <option>产品经理</option>
@@ -115,21 +118,31 @@ export default function Home() {
 
             <button
               onClick={generateFeedback}
-              className="bg-black text-white px-6 py-3 rounded-xl font-semibold"
+              disabled={loading}
+              className="bg-black text-white px-6 py-3 rounded-xl font-semibold disabled:opacity-50"
             >
-              生成 AI 反馈
+              {loading ? "生成中..." : "生成 AI 反馈"}
             </button>
 
-            {feedback && (
+            {result && (
               <div className="mt-6 rounded-2xl border border-gray-300 bg-gray-50 p-5">
                 <h3 className="font-bold mb-3">反馈结果</h3>
 
                 <div className="mb-4">
                   <p className="text-sm text-gray-500">综合评分</p>
-                  <p className="text-4xl font-bold">{score} / 100</p>
+                  <p className="text-4xl font-bold">{result.score} / 100</p>
                 </div>
 
-                <p className="text-gray-700">{feedback}</p>
+                <p className="text-gray-700 mb-4">{result.feedback}</p>
+
+                <div>
+                  <p className="font-semibold mb-2">优化建议</p>
+                  <ul className="list-disc pl-5 text-gray-700 space-y-1">
+                    {result.suggestions.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
               </div>
             )}
           </div>
